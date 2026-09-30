@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { askTutor } from '../services/tutorService';
 import { CURRICULUM_CHAPTERS } from '../data/curriculumData';
+import { soundEffects } from '../utils/soundEffects';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -39,8 +41,35 @@ export const TutorChat: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const speakMessage = (msgId: string, text: string) => {
+    soundEffects.playTap();
+    if (!('speechSynthesis' in window)) return;
+
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const arVoice = voices.find(v => v.lang.startsWith('ar'));
+    if (arVoice) utterance.voice = arVoice;
+    utterance.lang = 'ar-SA';
+    utterance.rate = 0.92;
+
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+
+    window.speechSynthesis.speak(utterance);
+    setSpeakingMsgId(msgId);
   };
 
   useEffect(() => {
@@ -61,6 +90,7 @@ export const TutorChat: React.FC = () => {
     setMessages(prev => [...prev, userMsg]);
     if (!textToSend) setInputMessage('');
     setIsLoading(true);
+    soundEffects.playTap();
 
     try {
       const history = messages.slice(-6).map(m => ({
@@ -218,13 +248,29 @@ export const TutorChat: React.FC = () => {
                   }`}
                 >
                   <p className="whitespace-pre-line font-medium">{msg.text}</p>
-                  <span
-                    className={`block text-[10px] ${
-                      isTutor ? 'text-slate-400 dark:text-slate-500' : 'text-emerald-100 text-left'
-                    }`}
-                  >
-                    {msg.timestamp}
-                  </span>
+                  <div className="flex items-center justify-between pt-1">
+                    <span
+                      className={`block text-[10px] ${
+                        isTutor ? 'text-slate-400 dark:text-slate-500' : 'text-emerald-100 text-left'
+                      }`}
+                    >
+                      {msg.timestamp}
+                    </span>
+                    {isTutor && (
+                      <button
+                        onClick={() => speakMessage(msg.id, msg.text)}
+                        className={`p-1 rounded-md text-[10px] flex items-center gap-1 transition-colors cursor-pointer ${
+                          speakingMsgId === msg.id
+                            ? 'text-rose-500 font-bold animate-pulse'
+                            : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+                        }`}
+                        title="استماع للإجابة صوتياً"
+                      >
+                        {speakingMsgId === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                        <span>{speakingMsgId === msg.id ? 'إيقاف' : 'استماع'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {!isTutor && (

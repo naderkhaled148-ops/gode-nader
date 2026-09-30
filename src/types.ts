@@ -42,6 +42,7 @@ export interface Chapter {
     timeLimitMinutes: number;
     questions: QuizQuestion[];
   };
+  examModels?: ExamModel[];
   video: {
     id: string;
     title: string;
@@ -50,6 +51,16 @@ export interface Chapter {
     videoUrl: string;
     takeaways: string[];
   };
+}
+
+export interface ExamModel {
+  id: string;
+  modelCode: 'A' | 'B' | 'C' | 'D';
+  name: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  description: string;
+  timeLimitMinutes: number;
+  questions: QuizQuestion[];
 }
 
 export interface QuizQuestion {

@@ -11,7 +11,9 @@ import {
   Coffee,
   BookOpen,
   Award,
+  Bell,
 } from 'lucide-react';
+import { soundEffects } from '../utils/soundEffects';
 
 interface FocusTimerProps {
   onSessionComplete: (minutes: number, xp: number) => void;
@@ -22,13 +24,12 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({ onSessionComplete }) => 
   const [totalSeconds, setTotalSeconds] = useState<number>(25 * 60);
   const [secondsLeft, setSecondsLeft] = useState<number>(25 * 60);
   const [isActive, setIsActive] = useState<boolean>(false);
-  const [soundMode, setSoundMode] = useState<'none' | 'white' | 'binaural'>('none');
-
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const noiseNodeRef = useRef<AudioNode | null>(null);
+  const [soundMode, setSoundMode] = useState<'none' | 'rain' | 'alpha' | 'forest'>('none');
+  const [completionBanner, setCompletionBanner] = useState<string | null>(null);
 
   // Set preset
   const setPreset = (mins: number, newMode: 'study' | 'break') => {
+    soundEffects.playTap();
     setIsActive(false);
     setMode(newMode);
     setTotalSeconds(mins * 60);
@@ -44,7 +45,11 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({ onSessionComplete }) => 
       }, 1000);
     } else if (isActive && secondsLeft === 0) {
       setIsActive(false);
-      stopAmbientSound();
+      soundEffects.stopAmbient();
+      setSoundMode('none');
+
+      // Play timer completion chime
+      soundEffects.playTimerBell();
 
       if (mode === 'study') {
         const completedMins = Math.round(totalSeconds / 60);
@@ -53,16 +58,16 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({ onSessionComplete }) => 
 
         try {
           confetti({
-            particleCount: 80,
-            spread: 70,
+            particleCount: 90,
+            spread: 75,
             origin: { y: 0.6 },
           });
         } catch (e) {}
 
-        alert(`🎉 مبروك يا بطل! أتممت جلسة مذاكرة بتركيز مدتها ${completedMins} دقيقة! وحصلت على +${xpEarned} XP! خذ استراحة قصيرة الآن.`);
+        setCompletionBanner(`🎉 مبروك يا بطل! أتممت جلسة مذاكرة بتركيز مدتها ${completedMins} دقيقة وحصلت على +${xpEarned} XP! خذ استراحة قصيرة.`);
         setPreset(5, 'break');
       } else {
-        alert('☕ انتهت فترة الاستراحة! حان وقت استئناف المذاكرة بنشاط!');
+        setCompletionBanner('☕ انتهت فترة الاستراحة! حان وقت استئناف المذاكرة بنشاط!');
         setPreset(25, 'study');
       }
     }
@@ -70,81 +75,28 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({ onSessionComplete }) => 
     return () => clearInterval(interval);
   }, [isActive, secondsLeft, mode, totalSeconds]);
 
-  // Ambient sound synthesizer using Web Audio API (100% offline!)
-  const startAmbientSound = (type: 'white' | 'binaural') => {
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+  // Ambient sound selection using robust soundEffects
+  const handleSoundSelect = (type: 'rain' | 'alpha' | 'forest') => {
+    soundEffects.playTap();
+    if (soundMode === type) {
+      soundEffects.stopAmbient();
+      setSoundMode('none');
+    } else {
+      const started = soundEffects.startAmbient(type);
+      if (started) {
+        setSoundMode(type);
       }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      stopAmbientSound();
-
-      if (type === 'white') {
-        // Pink / White noise generator for high focus
-        const bufferSize = ctx.sampleRate * 2;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        let b0 = 0, b1 = 0, b2 = 0;
-        for (let i = 0; i < bufferSize; i++) {
-          const white = Math.random() * 2 - 1;
-          b0 = 0.99886 * b0 + white * 0.0555179;
-          b1 = 0.99332 * b1 + white * 0.0750759;
-          b2 = 0.96900 * b2 + white * 0.1538520;
-          data[i] = (b0 + b1 + b2) * 0.05; // soft volume
-        }
-
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-        noise.loop = true;
-
-        const gainNode = ctx.createGain();
-        gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
-
-        noise.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        noise.start();
-        noiseNodeRef.current = noise;
-      } else if (type === 'binaural') {
-        // Alpha waves tone (432Hz focus frequency)
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(216, ctx.currentTime);
-        gain.gain.setValueAtTime(0.04, ctx.currentTime);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        noiseNodeRef.current = osc;
-      }
-
-      setSoundMode(type);
-    } catch (e) {
-      console.warn('Web Audio Ambient error:', e);
     }
-  };
-
-  const stopAmbientSound = () => {
-    if (noiseNodeRef.current) {
-      try {
-        (noiseNodeRef.current as any).stop?.();
-        noiseNodeRef.current.disconnect();
-      } catch (e) {}
-      noiseNodeRef.current = null;
-    }
-    setSoundMode('none');
   };
 
   // Toggle play/pause
   const togglePlay = () => {
+    soundEffects.playTap();
     setIsActive(prev => {
       const next = !prev;
       if (!next) {
-        stopAmbientSound();
+        soundEffects.stopAmbient();
+        setSoundMode('none');
       }
       return next;
     });
@@ -162,12 +114,28 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({ onSessionComplete }) => 
           <Timer className="w-6 h-6" />
         </div>
         <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
-          مؤقت التركيز الذكي (تقنية بومودورو)
+          مؤقت التركيز الذكي (تقنية بومودورو مع أصوات هادئة)
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
           ذاكر بتركيز تام لمدة 25 دقيقة، ثم استرح 5 دقائق لتثبيت المعلومات وتنشيط الذاكرة.
         </p>
       </div>
+
+      {/* Completion Alert Banner */}
+      {completionBanner && (
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 flex items-center justify-between text-xs sm:text-sm font-bold text-emerald-800 dark:text-emerald-200 animate-bounce">
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-emerald-600 animate-spin" />
+            <span>{completionBanner}</span>
+          </div>
+          <button
+            onClick={() => setCompletionBanner(null)}
+            className="text-emerald-700 hover:text-emerald-900 font-extrabold px-2 py-1 cursor-pointer"
+          >
+            إغلاق ✕
+          </button>
+        </div>
+      )}
 
       {/* Main Timer Display Card */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200 dark:border-slate-800 shadow-md space-y-8 flex flex-col items-center">
@@ -263,11 +231,14 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({ onSessionComplete }) => 
           <div className="flex items-center justify-between text-xs font-extrabold text-slate-700 dark:text-slate-300">
             <span className="flex items-center gap-1.5">
               <Volume2 className="w-4 h-4 text-emerald-600" />
-              <span>أصوات خلفية لعزل المشتتات (تعمل بدون نت):</span>
+              <span>أصوات خلفية لعزل المشتتات (تعمل مباشرة بدون إنترنت):</span>
             </span>
             {soundMode !== 'none' && (
               <button
-                onClick={stopAmbientSound}
+                onClick={() => {
+                  soundEffects.stopAmbient();
+                  setSoundMode('none');
+                }}
                 className="text-rose-500 hover:underline cursor-pointer"
               >
                 إيقاف الصوت ✕
@@ -275,26 +246,36 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({ onSessionComplete }) => 
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
-              onClick={() => (soundMode === 'white' ? stopAmbientSound() : startAmbientSound('white'))}
+              onClick={() => handleSoundSelect('rain')}
               className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                soundMode === 'white'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-800 dark:text-emerald-200'
+                soundMode === 'rain'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-800 dark:text-emerald-200 shadow-xs'
                   : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
               }`}
             >
-              🌧️ مطر هادئ وضوضاء وردية
+              🌧️ صوت المطر الهادئ
             </button>
             <button
-              onClick={() => (soundMode === 'binaural' ? stopAmbientSound() : startAmbientSound('binaural'))}
+              onClick={() => handleSoundSelect('alpha')}
               className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                soundMode === 'binaural'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-800 dark:text-emerald-200'
+                soundMode === 'alpha'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-800 dark:text-emerald-200 shadow-xs'
                   : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
               }`}
             >
-              🧘 رنين موجات التركيز ألفا
+              🧘 موجات ألفا للتركيز الذهني
+            </button>
+            <button
+              onClick={() => handleSoundSelect('forest')}
+              className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                soundMode === 'forest'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-800 dark:text-emerald-200 shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              🍃 نسيم الطبيعة الهادئ
             </button>
           </div>
         </div>

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { CURRICULUM_CHAPTERS } from '../data/curriculumData';
 import { Chapter } from '../types';
+import { soundEffects } from '../utils/soundEffects';
 
 interface SmartSummariesProps {
   initialChapterId?: string;
@@ -34,8 +35,9 @@ export const SmartSummaries: React.FC<SmartSummariesProps> = ({
   const selectedChapter: Chapter =
     CURRICULUM_CHAPTERS.find(c => c.id === selectedChapterId) || CURRICULUM_CHAPTERS[0];
 
-  // Text to speech for smart reading
+  // Text to speech for smart reading with fallback and voice detection
   const handleToggleSpeech = () => {
+    soundEffects.playTap();
     if (!('speechSynthesis' in window)) {
       alert('ميزة القراءة الصوتية غير مدعومة في متصفحك الحالي');
       return;
@@ -49,8 +51,16 @@ export const SmartSummaries: React.FC<SmartSummariesProps> = ({
 
     const textToRead = `${selectedChapter.title}. ${selectedChapter.summary.overview}. ${selectedChapter.summary.keyPoints.join('. ')}`;
     const utterance = new SpeechSynthesisUtterance(textToRead);
+
+    // Pick best Arabic voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const arabicVoice = voices.find(v => v.lang.startsWith('ar') || v.lang.includes('ar'));
+    if (arabicVoice) {
+      utterance.voice = arabicVoice;
+    }
     utterance.lang = 'ar-SA';
-    utterance.rate = 0.9;
+    utterance.rate = 0.92;
+    utterance.pitch = 1.05;
 
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);

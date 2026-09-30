@@ -26,50 +26,16 @@ import {
   getSheetsConfig,
   saveSheetsConfig,
 } from './services/storageService';
+import { soundEffects } from './utils/soundEffects';
 
-// Audio chime generator using Web Audio API
+// Unified audio chimes using soundEffects utility
 const playTone = (type: 'success' | 'alert' | 'xp') => {
-  try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    if (type === 'success') {
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-      osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.15); // E5
-      osc.frequency.exponentialRampToValueAtTime(783.99, ctx.currentTime + 0.3); // G5
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.4);
-    } else if (type === 'xp') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.2);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.25);
-    } else {
-      // alert
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(350, ctx.currentTime);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.3);
-    }
-  } catch (e) {
-    // Ignore audio errors on unsupported environments
+  if (type === 'success') {
+    soundEffects.playVictory();
+  } else if (type === 'xp') {
+    soundEffects.playCorrect();
+  } else {
+    soundEffects.playTimerBell();
   }
 };
 
